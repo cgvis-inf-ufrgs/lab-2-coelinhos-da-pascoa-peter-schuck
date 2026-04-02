@@ -192,7 +192,7 @@ bool g_MiddleMouseButtonPressed = false; // Análogo para botão do meio do mous
 // renderização.
 float g_CameraTheta = 0.0f; // Ângulo no plano ZX em relação ao eixo Z
 float g_CameraPhi = 0.3f;   // Ângulo em relação ao eixo Y
-float g_CameraDistance = 3.5f; // Distância da câmera para a origem
+float g_CameraDistance = 15.5f; // Distância da câmera para a origem
 
 // Variáveis que controlam rotação do antebraço
 float g_ForearmAngleZ = 0.0f;
@@ -365,7 +365,7 @@ int main(int argc, char* argv[])
         // Note que, no sistema de coordenadas da câmera, os planos near e far
         // estão no sentido negativo! Veja slides 176-204 do documento Aula_09_Projecoes.pdf.
         float nearplane = -0.1f;  // Posição do "near plane"
-        float farplane  = -10.0f; // Posição do "far plane"
+        float farplane  = -50.0f; // Posição do "far plane"
 
         if (g_UsePerspectiveProjection)
         {
@@ -399,20 +399,30 @@ int main(int argc, char* argv[])
         #define SPHERE 0
         #define BUNNY  1
         #define PLANE  2
-        float old_seconds = (float)glfwGetTime();
-        float posX_bunny = 0.0f;
+        float t = (float)glfwGetTime();
+        #define NUM_BUNNIES 15
+        #define BUNNY_RADIUS 6.0f
+        #define BUNNY_HEIGHT 2.0f
 
-        // Desenhamos o modelo do coelho
-        model = Matrix_Translate(1.0f,1.0f,0.0f);
-        glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(g_object_id_uniform, BUNNY);
-        DrawVirtualObject("the_bunny");
+        for (int i = 0; i < NUM_BUNNIES; i++)
+        {
+            float local_angle = (float)i * (2.0f * 3.14159265f / (float)NUM_BUNNIES);
+            float moving_angle = local_angle + t; // gira ao redor do centro
+            float x = BUNNY_RADIUS * cos(moving_angle);
+            float z = BUNNY_RADIUS * sin(moving_angle);
 
-        for(float i=0;i<15;i++) {
-        model = Matrix_Translate(i, sin(4*old_seconds),0.0f) * Matrix_Rotate_Y(old_seconds);
-        glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(g_object_id_uniform, BUNNY);
-        DrawVirtualObject("the_bunny");
+            // Padrão desejado: quando i está no topo, i-1 está médio e i-2 está no fundo.
+            // Usei diferença de fase de 120° (2π/3) por índice para esta sequência cíclica.
+            float phase_offset = (float)i * (2.0f * 3.14159265f / 3.0f);
+            float y = BUNNY_HEIGHT + 2.0f * sin(2.0f * t + phase_offset);
+
+            // Orienta o coelho para olhar para o centro do círculo (origem)
+            float face_center_angle = atan2f(-x, -z); // modelo assume frente em +Z
+            model = Matrix_Translate(x, y, z) * Matrix_Rotate_Y(face_center_angle);
+
+            glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform1i(g_object_id_uniform, BUNNY);
+            DrawVirtualObject("the_bunny");
         }
 
         // Desenhamos o modelo da esfera
