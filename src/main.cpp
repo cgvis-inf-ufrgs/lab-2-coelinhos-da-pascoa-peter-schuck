@@ -400,37 +400,75 @@ int main(int argc, char* argv[])
         #define BUNNY  1
         #define PLANE  2
         float t = (float)glfwGetTime();
-        #define NUM_BUNNIES 15
-        #define BUNNY_RADIUS 6.0f
+        #define NUM_BUNNIES 16
+        #define BUNNY_RADIUS 7.0f
         #define BUNNY_HEIGHT 2.0f
+        #define FIXED_PEAK_ANGLE 0.0f // Ângulo onde o salto máximo é fixado (0 = eixo +X)
+        #define BUNNY_SPEED 0.5f // Fator de velocidade (reduz para mais lento)
 
         for (int i = 0; i < NUM_BUNNIES; i++)
         {
             float local_angle = (float)i * (2.0f * 3.14159265f / (float)NUM_BUNNIES);
-            float moving_angle = local_angle + t; // gira ao redor do centro
+            float moving_angle = local_angle - BUNNY_SPEED * t; // gira ao redor do centro (mais lento)
             float x = BUNNY_RADIUS * cos(moving_angle);
             float z = BUNNY_RADIUS * sin(moving_angle);
 
-            // Padrão desejado: quando i está no topo, i-1 está médio e i-2 está no fundo.
-            // Usei diferença de fase de 120° (2π/3) por índice para esta sequência cíclica.
-            float phase_offset = (float)i * (2.0f * 3.14159265f / 3.0f);
-            float y = BUNNY_HEIGHT + 2.0f * sin(2.0f * t + phase_offset);
+            // Padrão de altura fixado à posição espacial, não ao índice do coelho.
+            // 4 picos máximos distribuídos igualmente ao redor do círculo
+            float y = BUNNY_HEIGHT + 2.0f * cos(4.0f * (moving_angle - FIXED_PEAK_ANGLE));
 
-            // Orienta o coelho para olhar para o centro do círculo (origem)
+            // Verificar se este coelho é um dos 4 especiais (distribuídos igualmente ao redor)
+            int step = NUM_BUNNIES / 4;
+            bool is_special_bunny = (i % step == 0) && (i < NUM_BUNNIES);
             float face_center_angle = atan2f(-x, -z); // modelo assume frente em +Z
-            model = Matrix_Translate(x, y, z) * Matrix_Rotate_Y(face_center_angle);
+
+            if (is_special_bunny)
+            {
+                // Coelhos especiais: rotation ao redor do eixo Z local
+                float backflip_angle = 2.0f * t; // rotação ao redor do eixo Z local
+                model = Matrix_Translate(x, y, z) 
+                      * Matrix_Rotate_Y(face_center_angle)
+                      * Matrix_Rotate_Z(backflip_angle);
+            }
+            else
+            {
+                model = Matrix_Translate(x, y, z) * Matrix_Rotate_Y(face_center_angle);
+            }
 
             glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model));
             glUniform1i(g_object_id_uniform, BUNNY);
             DrawVirtualObject("the_bunny");
-        }
 
-        // Desenhamos o modelo da esfera
-        for(float i=1;i<17;i++) {
-        model = Matrix_Translate(-1.0f,i,0.0f) * Matrix_Scale(0.3f, 0.4f, 0.3f);
-        glUniformMatrix4fv(g_model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(g_object_id_uniform, SPHERE);
-        DrawVirtualObject("the_sphere");
+            // Duas esferas orbitando ao redor do eixo X local do coelho (sempre upright)
+            float orbit_angle = 1.0f * t + local_angle; // ângulo de órbita
+            float sphere_distance = 1.4f; // raio da órbita
+            float sphere_scale_x = 0.3f;
+            float sphere_scale_y = 0.4f;
+            float sphere_scale_z = 0.3f;
+
+            // Usa apenas a orientação yaw do coelho para a órbita
+            glm::mat4 bunny_yaw = Matrix_Translate(x, y, z) * Matrix_Rotate_Y(face_center_angle);
+
+            // Função para calcular posição world da esfera
+            auto getSphereWorldPos = [&](float angle) -> glm::vec3 {
+                glm::vec4 local_offset = Matrix_Rotate_X(angle) * glm::vec4(0.0f, sphere_distance, 0.0f, 1.0f);
+                glm::vec4 world_offset = bunny_yaw * local_offset;
+                return glm::vec3(world_offset.x, world_offset.y, world_offset.z);
+            };
+
+            // Esfera 1: posição world, então scale em coordenadas world (sempre upright)
+            glm::vec3 p1 = getSphereWorldPos(orbit_angle);
+            glm::mat4 sphere1_model = Matrix_Translate(p1.x, p1.y, p1.z) * Matrix_Scale(sphere_scale_x, sphere_scale_y, sphere_scale_z);
+            glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(sphere1_model));
+            glUniform1i(g_object_id_uniform, SPHERE);
+            DrawVirtualObject("the_sphere");
+
+            // Esfera 2: fase oposta
+            glm::vec3 p2 = getSphereWorldPos(orbit_angle + 3.14159265f);
+            glm::mat4 sphere2_model = Matrix_Translate(p2.x, p2.y, p2.z) * Matrix_Scale(sphere_scale_x, sphere_scale_y, sphere_scale_z);
+            glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(sphere2_model));
+            glUniform1i(g_object_id_uniform, SPHERE);
+            DrawVirtualObject("the_sphere");
         }
 
         // Desenhamos o plano do chão
